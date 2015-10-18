@@ -4,14 +4,13 @@ require 'pry'
 class TravisYaml 
 
   def initialize(filepath:, spec_dir:)
-    require 'yaml'
-    @yaml = Yaml::Load(File.open(filepath))
+    @yaml = YAML.load(File.open(filepath))
     @build_matrix = generate_matrix(@yaml['env']['matrix'])
     @ignored_specs = get_ignored_specs(@yaml['env']['global'])
     @dir_file_list = files_in_dir(spec_dir)
   end
 
-  def build_matrix 
+  def build_matrix
     @build_matrix
   end
 
@@ -61,6 +60,10 @@ class TravisYaml
 
     valid_env_var(key, value) ? { key[1] => value[1] } : {}
   end
+
+  def valid_env_var(key, val)
+    (key.nil? || key[1].nil? || val.nil? || val[1].nil?) ? false : true
+  end
 end
 
 
@@ -71,15 +74,35 @@ class YamlTransforms
   end
 
   def register_line_transform(key, &func)
-    transforms = @transforms[key]
-    transforms = transforms ? transforms << func : [func]
+    if @transforms[key].nil?
+      @transforms[key] = [func]
+    else
+      @transforms[key] << func
+    end
+    # transforms = transforms ? transforms << func : [func]
+    # transforms
   end
 
+  # this is a bit big.
   def apply_transforms(data)
     data.map do |line|
-      @transforms.keys.map do |key, func|
-        line[key] = func(line[key])
+      @transforms.keys.map do |key|
+        next line if line[key].nil?
+        func_list = @transforms[key]
+        value = func_list.reduce(line[key]) do |accum, func|
+          func.call(accum)
+        end
+        new_line = line.clone
+        new_line[key] = value
+        new_line
       end.reduce({}, :merge)
+    end
+  end
+
+  def flatten_dedup(list:, key:)
+    list.reduce([]) do |accum, val|
+      value = val[key] ? val[key] : []
+      accum + value
     end
   end
   
@@ -130,9 +153,7 @@ class YamlTransforms
     valid_env_var(key, value) ? { key[1] => value[1] } : {}
   end
 
-  def self.valid_env_var(key, val)
-    (key.nil? || key[1].nil? || val.nil? || val[1].nil?) ? false : true
-  end
+
 
   def self.get_ignored_specs(filepath)
     read_travis_file(filepath)['env']['global'].map do |row|

@@ -8,16 +8,16 @@ spec_dir_glob = 'spec/**/*_spec.rb'
 
 travis_yaml = TravisYaml.new(filepath: filepath, spec_dir: spec_dir_glob)
 
-original_matrix = TravisYaml.build_matrix
+original_matrix = travis_yaml.build_matrix
 
 # We ignore workers past num_builds count
-matrix_post_ignored_lines = original_matrix.slice(0..TravsYaml.num_builds)
-ignored_lines = matrix.slice(TravisYaml.num_builds..-1)
+matrix_post_ignored_lines = original_matrix.slice(0..travis_yaml.num_builds)
+ignored_lines = original_matrix.slice(travis_yaml.num_builds..-1)
 
-yaml_tranforms = YamlTransforms.new
+yaml_transforms = YamlTransforms.new
 
 yaml_transforms.register_line_transform('TEST_SUITE') do |test_suite|
-  TravisYaml.ignored_specs.each do |spec|
+  travis_yaml.ignored_specs.each do |spec|
     test_suite.gsub!(spec, '')
   end
   test_suite
@@ -28,6 +28,10 @@ yaml_transforms.register_line_transform('TEST_SUITE') do |test_suite|
 end
 
 default_travis_yaml = yaml_transforms.apply_transforms(matrix_post_ignored_lines)
+
+flat_spec_list = yaml_transforms.flatten_dedup(list: default_travis_yaml, key: 'TEST_SUITE')
+
+
 
 binding.pry
 
