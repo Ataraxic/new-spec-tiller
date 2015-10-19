@@ -34,6 +34,8 @@ travis_after_remove = yaml_transforms.remove_specs(matrix: default_travis_yaml,
 
 specs_to_add = specs_in_dir - yaml_spec_list
 
+puts "  Removed: #{specs_to_remove}\n  Added:   #{specs_to_add}\n\n"
+
 specs_by_index = yaml_transforms.rand_specs(specs: specs_to_add,
                                             num_builds: travis_after_remove.length)
 
