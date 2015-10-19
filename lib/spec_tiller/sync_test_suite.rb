@@ -3,11 +3,10 @@ require 'pry'
 
 class TravisYaml 
 
-  def initialize(filepath:, spec_dir:)
+  def initialize(filepath:)
     @yaml = YAML.load(File.open(filepath))
     @build_matrix = generate_matrix(@yaml['env']['matrix'])
     @ignored_specs = get_ignored_specs(@yaml['env']['global'])
-    @dir_file_list = files_in_dir(spec_dir)
   end
 
   def build_matrix
@@ -20,6 +19,10 @@ class TravisYaml
 
   def ignored_specs
     @ignored_specs
+  end
+
+  def dir_spec_list
+    @dir_file_list
   end
 
   private
@@ -86,16 +89,14 @@ class YamlTransforms
   # this is a bit big.
   def apply_transforms(data)
     data.map do |line|
-      @transforms.keys.map do |key|
-        next line if line[key].nil?
+      line.merge(@transforms.keys.map do |key|
+        next if line[key].nil?
         func_list = @transforms[key]
         value = func_list.reduce(line[key]) do |accum, func|
           func.call(accum)
         end
-        new_line = line.clone
-        new_line[key] = value
-        new_line
-      end.reduce({}, :merge)
+        { key => value}
+      end.compact.reduce({}, :merge))
     end
   end
 
@@ -105,70 +106,50 @@ class YamlTransforms
       accum + value
     end
   end
-  
 
-  def sync
-    10
-  end
-  
-  def self.read_travis_file(filepath)
-    YAML::load(File.open(filepath))
-  end
-
-  def self.get_current_file_list(matcher)
-    Dir.glob(matcher).map { |file_path| file_path.slice(/(spec\/\S+$)/) }
-  end
-
-  def self.num_builds(filepath)
-    read_travis_file(filepath)['num_builds']
-  end
-
-  def self.transform(coll, matcher)
-    coll.map(&matcher)
-  end
-
-  def self.get_build_matrix(filepath)
-    matrix = read_travis_file(filepath)['env']['matrix']
-    generate_hash_from_matrix(matrix)
-  end
-
-  def self.generate_hash_from_matrix(matrix)
-    # compact will remove empty lines from the matrix
-    matrix.compact.map do |line|
-      generate_hash(line)
+  def add_specs(matrix:, specs_by_index:)
+    matrix.each_with_index.map do |line, i|
+      next line if specs_by_index[i].nil?
+      new_line = line.clone
+      new_line['TEST_SUITE'] ||= []
+      new_line['TEST_SUITE'] = new_line['TEST_SUITE'] + specs_by_index[i]
+      new_line
     end
   end
 
-  def self.generate_hash(line)
-    # ',' is the required separator for env vars
-    line.split(',').map do |env_var|
-      separate_key_value(env_var)
-    end.reduce({}, :merge)
+  def remove_specs(matrix:, specs:)
+    matrix.map do |line|
+      next line if line['TEST_SUITE'].nil?
+      new_line = line.clone
+      new_line['TEST_SUITE'] = line['TEST_SUITE'].clone - specs
+      new_line
+    end
   end
 
-  def self.separate_key_value(env_var)
-    key = /(\w+)=/.match(env_var)
-    value = /\w+="(.*)"/.match(env_var)
-
-    valid_env_var(key, value) ? { key[1] => value[1] } : {}
+  def rand_specs(specs:, num_builds:)
+    specs_to_add_by_index = {}
+    specs.each do |spec|
+      index = rand(num_builds)
+      specs_to_add_by_index[index] ||= []
+      specs_to_add_by_index[index] << spec
+    end
+    specs_to_add_by_index
   end
 
-
-
-  def self.get_ignored_specs(filepath)
-    read_travis_file(filepath)['env']['global'].map do |row|
-      if row.is_a?(String)
-        # Input: IGNORE_SPECS="spec/a.rb spec/b.rb"
-        # Output: ['spec/a.rb spec/b.rb']
-        matches = row.match(/IGNORE_SPECS="\s*([^"]+)"/)
-        matches[1].split(' ') unless matches.nil?
+  def remove_empty_test_suite(matrix)
+    matrix.map do |line|
+      val = line['TEST_SUITE']
+      if val.nil?
+        line
+      else
+        val.empty? ? line.tap { |h| h.delete('TEST_SUITE') } : line
       end
-    end.compact.flatten
+    end
   end
 
-  
-  
-  def error_message()
-    
+  def remove_empty_hash(matrix)
+    matrix.map do |line|
+      line unless line.empty?
+    end.compact
   end
 end
