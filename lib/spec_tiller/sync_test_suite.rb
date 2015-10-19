@@ -21,8 +21,9 @@ class TravisYaml
     @ignored_specs
   end
 
-  def dir_spec_list
-    @dir_file_list
+  def rewrite_matrix(matrix)
+    @yaml['env']['matrix'] = matrix
+    File.open('another_travis.yml', 'w') { |file| file.write(@yaml.to_yaml(:line_width => -1)) }
   end
 
   private
@@ -82,8 +83,6 @@ class YamlTransforms
     else
       @transforms[key] << func
     end
-    # transforms = transforms ? transforms << func : [func]
-    # transforms
   end
 
   # this is a bit big.
@@ -108,21 +107,16 @@ class YamlTransforms
   end
 
   def add_specs(matrix:, specs_by_index:)
-    matrix.each_with_index.map do |line, i|
-      next line if specs_by_index[i].nil?
-      new_line = line.clone
-      new_line['TEST_SUITE'] ||= []
-      new_line['TEST_SUITE'] = new_line['TEST_SUITE'] + specs_by_index[i]
-      new_line
+    map_by_key_with_index(matrix: matrix, key: 'TEST_SUITE') do |test_suite, i|
+      next test_suite if specs_by_index[i].nil?
+      test_suite ||= []
+      test_suite = test_suite + specs_by_index[i] 
     end
   end
 
   def remove_specs(matrix:, specs:)
-    matrix.map do |line|
-      next line if line['TEST_SUITE'].nil?
-      new_line = line.clone
-      new_line['TEST_SUITE'] = line['TEST_SUITE'].clone - specs
-      new_line
+    map_by_key(key: 'TEST_SUITE', matrix: matrix) do |test_suite|
+      test_suite - specs
     end
   end
 
@@ -151,5 +145,31 @@ class YamlTransforms
     matrix.map do |line|
       line unless line.empty?
     end.compact
+  end
+
+  def format_matrix(matrix:)
+    map_by_key(matrix: matrix, key: 'TEST_SUITE') do |test_suite|
+      test_suite.join(' ')
+    end.map do |line|
+      line.keys.map do |env_var|
+        %(#{env_var}="#{line[env_var]}")
+      end.join(', ')
+    end
+  end
+
+  private
+
+  def map_by_key(key:, matrix:, &block)
+    matrix.map do |*args|
+      line, *rest = *args
+      next line if line[key].nil?
+      new_line = line.clone
+      new_line[key] = block.call(new_line[key].clone, *rest)
+      new_line
+    end
+  end
+
+  def map_by_key_with_index(key:, matrix:, &block)
+    map_by_key(matrix: matrix.each_with_index, key: key, &block)
   end
 end

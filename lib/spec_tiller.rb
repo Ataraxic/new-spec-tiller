@@ -37,15 +37,15 @@ specs_to_add = specs_in_dir - yaml_spec_list
 specs_by_index = yaml_transforms.rand_specs(specs: specs_to_add,
                                             num_builds: travis_after_remove.length)
 
-puts specs_by_index
 travis_after_add = yaml_transforms.add_specs(matrix: travis_after_remove,
                                              specs_by_index: specs_by_index)
-binding.pry
-puts travis_after_add
 
-travis_after_test_suite_removal = yaml_transforms.remove_empty_test_suite(travis_after_add)
+travis_after_empty_test_suite_removal = yaml_transforms.remove_empty_test_suite(travis_after_add)
 
-travis_after_compacting = yaml_transforms.remove_empty_hash(travis_after_test_suite_removal)
+travis_after_compacting = yaml_transforms.remove_empty_hash(travis_after_empty_test_suite_removal)
 
+formatted_travis_matrix = yaml_transforms.format_matrix(matrix: travis_after_compacting)
+
+travis_yaml.rewrite_matrix(formatted_travis_matrix)
 
 binding.pry
