@@ -50,4 +50,4 @@ formatted_travis_matrix = yaml_transforms.format_matrix(matrix: travis_after_com
 
 travis_yaml.rewrite_matrix(formatted_travis_matrix)
 
-binding.pry
+
