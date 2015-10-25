@@ -8,8 +8,6 @@ class TravisApi
     @repository = @client.repo(current_repo)
     
     raise 'Repo not found. Ensure Fetch URL of "git remote show origin" points to your repository' if repository.nil?
-
-    
   end
 
   def get_build_log(branch)
